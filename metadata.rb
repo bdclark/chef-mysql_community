@@ -1,0 +1,10 @@
+name             'mysql_community'
+maintainer       'Brian Clark'
+maintainer_email 'brian@clark.zone'
+license          'apache2'
+description      'Installs/Configures mysql_community'
+long_description 'Installs/Configures mysql_community'
+version          '0.1.0'
+
+depends 'yum-mysql-community'
+depends 'mysqld'

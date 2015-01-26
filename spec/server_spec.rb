@@ -49,8 +49,26 @@ describe 'mysql_community::server' do
     it 'configures mysql' do
       expect(chef_run).to create_mysqld
     end
+
+    it 'creates mysql_grants.slq template' do
+      expect(chef_run).to create_template('/etc/mysql_grants.sql').with(
+        owner: 'root',
+        group: 'root',
+        mode: '0600')
+    end
+
+    it 'mysql_grants.sql template notifies execute resource' do
+      resource = chef_run.template('/etc/mysql_grants.sql')
+      expect(resource).to notify('execute[mysql_grants]').to(:run)
+    end
+
+    it 'mysql_grant resource does nothing' do
+      resource = chef_run.execute('mysql_grants')
+      expect(resource).to do_nothing
+    end
   end
 
+  # TODO: More tests
   context 'with ubuntu platform' do
     let(:platform) { 'ubuntu' }
     context 'with 12.04' do

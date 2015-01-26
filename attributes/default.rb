@@ -2,6 +2,9 @@
 
 default['mysqld']['version'] = nil
 
+default['mysqld']['allow_remote_root'] = false
+default['mysqld']['root_host_acl'] = []
+
 default['mysqld']['my_cnf']['mysqld']['port'] = 3306
 default['mysqld']['my_cnf']['mysqld']['bind-address'] = '127.0.0.1'
 default['mysqld']['my_cnf']['mysqld']['user'] = 'mysql'

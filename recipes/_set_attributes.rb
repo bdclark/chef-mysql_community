@@ -47,6 +47,6 @@ unless server_packages && client_packages
   fail "No MySQL #{version} packages supported for this platform!"
 end
 
-node.default['mysqld']['version'] = version
+node.default_unless['mysqld']['version'] = version
 node.default['mysqld']['mysql_packages'] = server_packages
 node.default['mysqld']['client_packages'] = client_packages

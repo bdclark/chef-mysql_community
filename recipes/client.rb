@@ -16,6 +16,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-include_recipe 'mysql_community::_set_attributes_from_version'
+include_recipe 'mysql_community::_set_attributes'
 
 node['mysqld']['client_packages'].each { |p| package p }

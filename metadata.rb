@@ -6,5 +6,5 @@ description      'Installs/Configures mysql_community'
 long_description 'Installs/Configures mysql_community'
 version          '0.1.0'
 
-depends 'yum-mysql-community'
-depends 'mysqld'
+depends 'yum-mysql-community', '~> 0.1'
+depends 'mysqld', '~> 1.0'

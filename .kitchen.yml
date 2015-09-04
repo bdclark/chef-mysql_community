@@ -13,6 +13,9 @@ suites:
   - name: server
     run_list:
       - recipe[mysql_community::server]
+    attributes:
+      mysqld:
+        root_password: ilikerandompasswords
   - name: client
     run_list:
       - recipe[mysql_community::client]

@@ -4,10 +4,18 @@ describe 'mysql_community::server' do
   let(:platform) { nil }
   let(:platform_version) { nil }
   let(:version) { nil }
+  let(:password) { nil }
+  let(:maint_passwd) { nil }
   let(:chef_run) do
     ChefSpec::SoloRunner.new(platform: platform,
                              version: platform_version) do |node|
       node.set['mysqld']['version'] = version
+      node.run_state = {
+        'mysqld' => {
+          'root_password' => password,
+          'sys_maint_password' => maint_passwd
+        }
+      }
     end.converge(described_recipe)
   end
 
@@ -18,21 +26,11 @@ describe 'mysql_community::server' do
     %w(5.5 5.6 5.7).each do |v|
       context "with supported version #{v}" do
         let(:version) { v }
-        it 'does not raise error' do
-          expect { chef_run }.not_to raise_error
-        end
 
         it "add mysql-community #{v} repo" do
           yum_recipe = "yum-mysql-community::mysql#{v.gsub('.', '')}"
           expect(chef_run).to include_recipe yum_recipe
         end
-      end
-    end
-
-    context 'with unsupported version' do
-      let(:version) { '5.1' }
-      it 'raises an error' do
-        expect { chef_run }.to raise_error
       end
     end
 
@@ -46,36 +44,113 @@ describe 'mysql_community::server' do
       expect(chef_run).to install_package('mysql-community-server')
     end
 
-    it 'configures mysql' do
-      expect(chef_run).to create_mysqld
+    it 'creates root .my.cnf' do
+      expect(chef_run).to create_template('/root/.my.cnf').with(
+        owner: 'root', group: 'root', mode: '0600')
     end
 
-    it 'creates mysql_grants.slq template' do
-      expect(chef_run).to create_template('/etc/mysql_grants.sql').with(
-        owner: 'root',
-        group: 'root',
-        mode: '0600')
+    it 'logrotate template has correct files' do
+      rotate_path = '/etc/logrotate.d/mysql'
+      expect(chef_run).to render_file(rotate_path).with_content(
+        '"/var/log/mysqld.log" "/var/log/mysqld-slow.log" {')
     end
 
-    it 'mysql_grants.sql template notifies execute resource' do
-      resource = chef_run.template('/etc/mysql_grants.sql')
-      expect(resource).to notify('execute[mysql_grants]').to(:run)
+    it 'logrotate template has correct user/group' do
+      expect(chef_run).to render_file('/etc/logrotate.d/mysql').with_content(
+        'create 640 mysql mysql')
     end
 
-    it 'mysql_grant resource does nothing' do
-      resource = chef_run.execute('mysql_grants')
-      expect(resource).to do_nothing
+    it 'logrotate template has correct auth' do
+      rotate_path = '/etc/logrotate.d/mysql'
+      expect(chef_run).to render_file(rotate_path).with_content(
+        'AUTH="--defaults-file=/root/.my.cnf"')
+    end
+
+    context 'with no root password' do
+      it 'does not set root password' do
+        expect(chef_run).not_to set_mysqld_password('root')
+      end
+
+      it 'root .my.cnf has blank password' do
+        expect(chef_run).to render_file('/root/.my.cnf')
+          .with_content(/^password = $/)
+      end
+    end
+
+    context 'with root password' do
+      let(:password) { 'foo' }
+
+      it 'sets password' do
+        expect(chef_run).to set_mysqld_password('root').with(password: 'foo')
+      end
+
+      it 'root .my.cnf has correct password' do
+        expect(chef_run).to render_file('/root/.my.cnf')
+          .with_content('password = foo')
+      end
+
+      it 'logrotate template has correct auth' do
+        rotate_path = '/etc/logrotate.d/mysql'
+        expect(chef_run).to render_file(rotate_path).with_content(
+          'AUTH="--defaults-file=/root/.my.cnf"')
+      end
     end
   end
 
-  # TODO: More tests
-  context 'with ubuntu platform' do
+  context 'with ubuntu 14.04' do
     let(:platform) { 'ubuntu' }
-    context 'with 12.04' do
-      let(:platform_version) { '12.04' }
+    let(:platform_version) { '14.04' }
+
+    %w(5.5 5.6).each do |v|
+      context "with supported version #{v}" do
+        let(:version) { v }
+        it 'does not raise error' do
+          expect { chef_run }.not_to raise_error
+        end
+
+        it 'install mysql-server package' do
+          expect(chef_run).to install_package("mysql-server-#{v}")
+        end
+      end
     end
-    context 'with 14.04' do
-      let(:platform_version) { '14.04' }
+
+    it 'logrotate template has correct files' do
+      rotate_path = '/etc/logrotate.d/mysql-server'
+      expect(chef_run).to render_file(rotate_path).with_content(
+        '"/var/log/mysql/error.log" "/var/log/mysql/slow-query.log" {')
     end
+
+    it 'logrotate template has correct user/group' do
+      rotate_path = '/etc/logrotate.d/mysql-server'
+      expect(chef_run).to render_file(rotate_path).with_content(
+        'create 640 mysql adm')
+    end
+
+    it 'logrotate template has correct auth' do
+      rotate_path = '/etc/logrotate.d/mysql-server'
+      expect(chef_run).to render_file(rotate_path).with_content(
+        'AUTH="--defaults-file=/etc/mysql/debian.cnf"')
+    end
+
+    it 'does not create root .my.cnf' do
+      expect(chef_run).not_to create_template('/root/.my.cnf')
+    end
+
+    context 'when debian-sys-maint password not specified' do
+      it 'does not set debian-sys-maint password' do
+        expect(chef_run).not_to set_mysqld_password('debian-sys-maint')
+      end
+    end
+
+    context 'when debian-sys-maint password set' do
+      let(:maint_passwd) { 'bar' }
+      it 'sets debian-sys-maint password' do
+        expect(chef_run).to set_mysqld_password('debian-sys-maint').with(password: 'bar')
+      end
+    end
+  end
+
+  it 'configures mysql' do
+    expect(chef_run).to create_mysqld
   end
 end

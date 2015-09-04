@@ -16,35 +16,67 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require 'shellwords'
+version = node['mysqld']['version']
 
-include_recipe 'mysql_community::_set_attributes'
+node.override['mysqld']['mysql_packages'] = value_for_platform_family(
+  'rhel' => 'mysql-community-server',
+  'debian' => "mysql-server-#{version}"
+)
 
-node['mysqld']['mysql_packages'].each { |p| package p }
-
-# Nuke default my.cnf settings of dependent mysqld cookbook
-# so they won't merge with ours
-node.default['mysqld']['my.cnf'] = nil
-
-mysqld 'default' do
-  my_cnf node['mysqld']['my_cnf']
+if platform_family?('rhel')
+  include_recipe "yum-mysql-community::mysql#{version.gsub('.', '')}"
 end
 
-hosts = %w(localhost 127.0.0.1 ::1)
-hosts << '%' if node['mysqld']['allow_remote_root'] == true
-hosts.concat node['mysqld']['root_host_acl'] if node['mysqld']['root_host_acl']
+include_recipe 'mysqld::mysql_install'
 
-template '/etc/mysql_grants.sql' do
-  source 'grants.sql.erb'
+# configure based on ['mysqld']['my.cnf'] node attributes
+mysqld 'default'
+
+password = node.run_state['mysqld']['root_password'] if node.run_state['mysqld']
+password ||= node['mysqld']['root_password']
+
+template '/root/.my.cnf' do
+  source 'root.my.cnf.erb'
   owner 'root'
   group 'root'
   mode '0600'
-  variables(hosts: hosts)
-  notifies :run, 'execute[mysql_grants]'
+  variables(
+    password: password
+  )
+  not_if { node['platform_family'] == 'debian' }
 end
 
-execute 'mysql_grants' do
-  command %(mysql #{node['mysqld']['auth'].shellescape} < /etc/mysql_grants.sql)
-  only_if %(mysql #{node['mysqld']['auth'].shellescape} -e 'SHOW DATABASES;')
-  action :nothing
+mysqld_password 'root' do
+  password password
+  only_if { password }
+end
+
+log_files = []
+node['mysqld']['logrotate']['files'].each do |log|
+  log_files << node['mysqld']['my.cnf']['mysqld'][log]
+  if node['mysqld']['my.cnf']['mysqld_safe']
+    log_files << node['mysqld']['my.cnf']['mysqld_safe'][log]
+  end
+end
+log_files.compact!.uniq!
+
+template node['mysqld']['logrotate']['path'] do
+  source 'logrotate.erb'
+  owner 'root'
+  group 'root'
+  mode '0644'
+  variables(
+    user: node['mysqld']['my.cnf']['mysqld']['user'],
+    group: node['mysqld']['logrotate']['group'],
+    auth: node['mysqld']['auth'],
+    files: log_files
+  )
+end
+
+maint_passwd = node.run_state['mysqld']['sys_maint_password'] if node.run_state['mysqld']
+maint_passwd ||= node['mysqld']['sys_maint_password']
+
+mysqld_password 'debian-sys-maint' do
+  password maint_passwd
+  only_if { maint_passwd }
 end

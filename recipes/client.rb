@@ -1,6 +1,6 @@
 #
 # Cookbook Name:: mysql_community
-# Recipe:: server
+# Recipe:: client
 #
 # Copyright 2015 Brian Clark
 #
@@ -16,6 +16,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-include_recipe 'mysql_community::_set_attributes'
+version = node['mysqld']['version']
+
+node.default['mysqld']['client_packages'] = value_for_platform_family(
+  'rhel' => %w(mysql-community-client mysql-community-devel),
+  'debian' => ["mysql-client-#{version}", 'libmysqlclient-dev']
+)
+
+if platform_family?('rhel')
+  include_recipe "yum-mysql-community::mysql#{version.gsub('.', '')}"
+end
 
 node['mysqld']['client_packages'].each { |p| package p }

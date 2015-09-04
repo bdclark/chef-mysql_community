@@ -1,9 +1,0 @@
-#
-# Managed by Chef, DO NOT DELETE OR MODIFY!
-#
-DELETE FROM mysql.user WHERE User='';
-DELETE FROM mysql.user WHERE User='root' AND Host NOT IN (<%= @hosts.uniq.map { |h| "'#{h}'" }.join(', ') %>);
-FLUSH PRIVILEGES;
-<% @hosts.each do |host| %>
-GRANT ALL ON *.* TO 'root'@'<%= host %>' WITH GRANT OPTION;
-<% end %>

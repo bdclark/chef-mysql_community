@@ -4,7 +4,7 @@ maintainer_email 'brian@clark.zone'
 license          'apache2'
 description      'Installs/Configures MySQL'
 long_description 'Installs/Configures MySQL'
-version          '0.1.0'
+version          '0.1.1'
 
 depends 'yum-mysql-community', '~> 0.1'
 depends 'mysqld', '~> 1.0.3'
